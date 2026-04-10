@@ -1,0 +1,41 @@
+# vaultpull configuration example
+# Copy this file to .vaultpull.yaml and fill in your values.
+# Profiles allow you to manage secrets for multiple environments.
+
+profiles:
+  default:
+    vault_addr: "http://127.0.0.1:8200"
+    vault_token: "root"          # or use VAULT_TOKEN env var
+    auth_method: "token"         # token | approle | kubernetes
+    env_file: ".env"
+    secrets:
+      - path: "secret/data/myapp/config"
+        keys:
+          DB_PASSWORD: DB_PASSWORD
+          API_KEY: API_KEY
+    extra_vars:
+      APP_ENV: development
+
+  staging:
+    vault_addr: "https://vault.staging.example.com"
+    vault_token: ""              # leave empty when using approle
+    auth_method: "approle"
+    vault_role: "myapp-staging"
+    env_file: ".env.staging"
+    secrets:
+      - path: "secret/data/myapp/staging"
+        keys:
+          DB_HOST: DB_HOST
+          DB_PASSWORD: DB_PASSWORD
+          REDIS_URL: REDIS_URL
+
+  production:
+    vault_addr: "https://vault.prod.example.com"
+    auth_method: "kubernetes"
+    vault_role: "myapp-prod"
+    env_file: ".env.production"
+    secrets:
+      - path: "secret/data/myapp/prod"
+        keys:
+          DB_PASSWORD: DB_PASSWORD
+          SECRET_KEY: SECRET_KEY
