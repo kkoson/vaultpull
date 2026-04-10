@@ -2,31 +2,38 @@ package config
 
 import "fmt"
 
-// Profile represents a named sync configuration targeting a specific
-// Vault path and local .env output file.
+// Profile represents a single sync profile configuration.
 type Profile struct {
-	Name      string `mapstructure:"name"`
-	VaultPath string `mapstructure:"vault_path"`
+	Name       string `mapstructure:"name"`
+	VaultPath  string `mapstructure:"vault_path"`
 	OutputFile string `mapstructure:"output_file"`
-	MountPath string `mapstructure:"mount_path"`
+	MountPath  string `mapstructure:"mount_path"`
+	Merge      bool   `mapstructure:"merge"`
 }
 
-// Validate checks that all required fields on a Profile are populated.
+// Validate checks that the profile has all required fields.
 func (p *Profile) Validate() error {
 	if p.Name == "" {
-		return fmt.Errorf("profile name must not be empty")
+		return fmt.Errorf("profile name is required")
 	}
 	if p.VaultPath == "" {
-		return fmt.Errorf("profile %q: vault_path must not be empty", p.Name)
+		return fmt.Errorf("profile %q: vault_path is required", p.Name)
 	}
 	if p.OutputFile == "" {
-		return fmt.Errorf("profile %q: output_file must not be empty", p.Name)
+		return fmt.Errorf("profile %q: output_file is required", p.Name)
 	}
 	return nil
 }
 
-// GetProfile returns the Profile with the given name from the Config.
-// It returns an error if no profile with that name exists.
+// DefaultMountPath returns the mount path, falling back to "secret" if empty.
+func (p *Profile) DefaultMountPath() string {
+	if p.MountPath == "" {
+		return "secret"
+	}
+	return p.MountPath
+}
+
+// GetProfile looks up a profile by name from the config.
 func (c *Config) GetProfile(name string) (*Profile, error) {
 	for i := range c.Profiles {
 		if c.Profiles[i].Name == name {
@@ -36,11 +43,10 @@ func (c *Config) GetProfile(name string) (*Profile, error) {
 	return nil, fmt.Errorf("profile %q not found", name)
 }
 
-// DefaultMountPath returns the mount path for the profile, falling back
-// to "secret" if none is explicitly configured.
-func (p *Profile) DefaultMountPath() string {
-	if p.MountPath == "" {
-		return "secret"
+// GetDefaultProfile returns the first profile if exactly one is defined.
+func (c *Config) GetDefaultProfile() (*Profile, error) {
+	if len(c.Profiles) == 1 {
+		return &c.Profiles[0], nil
 	}
-	return p.MountPath
+	return nil, fmt.Errorf("no default profile: %d profiles defined, specify one explicitly", len(c.Profiles))
 }
