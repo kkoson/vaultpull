@@ -1,11 +1,6 @@
-// Package env provides utilities for writing Vault secrets into
-// local .env files.
+// Package env provides utilities for reading and writing .env files.
 //
-// The Writer type serialises a flat map[string]string of key/value
-// pairs into the standard KEY=VALUE format understood by tools such
-// as direnv, docker-compose, and the godotenv library.
-//
-// Values that contain whitespace, hash characters, or quotes are
-// automatically wrapped in double-quotes so that consumers can parse
-// the file unambiguously.
+// Writer creates or overwrites a .env file from a map of secret key-value
+// pairs sourced from HashiCorp Vault. Reader parses an existing .env file
+// back into a map, enabling diff and merge workflows before writing.
 package env
