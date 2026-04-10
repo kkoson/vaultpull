@@ -6,45 +6,43 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Profile holds the configuration for a single named profile.
-type Profile struct {
-	VaultAddr  string            `mapstructure:"vault_addr"`
-	VaultToken string            `mapstructure:"vault_token"`
-	VaultRole  string            `mapstructure:"vault_role"`
-	AuthMethod string            `mapstructure:"auth_method"`
-	Secrets    []SecretMapping   `mapstructure:"secrets"`
-	EnvFile    string            `mapstructure:"env_file"`
-	ExtraVars  map[string]string `mapstructure:"extra_vars"`
-}
-
-// SecretMapping maps a Vault path to an optional key override.
-type SecretMapping struct {
-	Path   string            `mapstructure:"path"`
-	Keys   map[string]string `mapstructure:"keys"` // vault_key -> env_key
-}
-
-// Config is the top-level configuration structure.
+// Config holds the full application configuration loaded from the
+// .vaultpull.yaml file.
 type Config struct {
-	Profiles map[string]Profile `mapstructure:"profiles"`
+	Vault    VaultConfig `mapstructure:"vault"`
+	Profiles []Profile   `mapstructure:"profiles"`
 }
 
-// Load reads the configuration using viper and returns a Config.
-func Load() (*Config, error) {
+// VaultConfig holds connection and authentication settings for Vault.
+type VaultConfig struct {
+	Address  string      `mapstructure:"address"`
+	Token    string      `mapstructure:"token"`
+	AppRole  AppRoleCfg  `mapstructure:"approle"`
+}
+
+// AppRoleCfg holds AppRole authentication credentials.
+type AppRoleCfg struct {
+	RoleID   string `mapstructure:"role_id"`
+	SecretID string `mapstructure:"secret_id"`
+}
+
+// Load reads configuration from Viper into a Config struct and performs
+// basic validation.
+func Load(v *viper.Viper) (*Config, error) {
 	var cfg Config
-	if err := viper.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
-	if cfg.Profiles == nil {
-		cfg.Profiles = make(map[string]Profile)
-	}
-	return &cfg, nil
-}
 
-// GetProfile returns the named profile or an error if it does not exist.
-func (c *Config) GetProfile(name string) (*Profile, error) {
-	p, ok := c.Profiles[name]
-	if !ok {
-		return nil, fmt.Errorf("profile %q not found in config", name)
+	if cfg.Vault.Address == "" {
+		cfg.Vault.Address = "http://127.0.0.1:8200"
 	}
-	return &p, nil
+
+	for i := range cfg.Profiles {
+		if err := cfg.Profiles[i].Validate(); err != nil {
+			return nil, fmt.Errorf("invalid profile config: %w", err)
+		}
+	}
+
+	return &cfg, nil
 }
