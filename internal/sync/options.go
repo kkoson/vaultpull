@@ -22,3 +22,21 @@ func DefaultOptions() Options {
 		OverwriteExisting: true,
 	}
 }
+
+// WithDryRun returns a copy of the Options with DryRun set to the given value.
+func (o Options) WithDryRun(dryRun bool) Options {
+	o.DryRun = dryRun
+	return o
+}
+
+// WithVerbose returns a copy of the Options with Verbose set to the given value.
+func (o Options) WithVerbose(verbose bool) Options {
+	o.Verbose = verbose
+	return o
+}
+
+// WithOverwriteExisting returns a copy of the Options with OverwriteExisting set to the given value.
+func (o Options) WithOverwriteExisting(overwrite bool) Options {
+	o.OverwriteExisting = overwrite
+	return o
+}
