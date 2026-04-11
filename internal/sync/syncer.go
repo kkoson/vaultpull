@@ -1,45 +1,98 @@
-// Package sync orchestrates fetching secrets from Vault and writing them to
-// a local .env file.
 package sync
 
-import "fmt"
+import (
+	"context"
+	"fmt"
 
-// SecretsClient defines the interface for retrieving secrets from a remote
-// secrets backend.
-type SecretsClient interface {
-	GetSecrets(path string) (map[string]string, error)
+	"github.com/yourusername/vaultpull/internal/audit"
+	"github.com/yourusername/vaultpull/internal/config"
+	"github.com/yourusername/vaultpull/internal/diff"
+	"github.com/yourusername/vaultpull/internal/env"
+)
+
+// SecretReader fetches key/value pairs from a remote secrets store.
+type SecretReader interface {
+	GetSecrets(ctx context.Context, mountPath, secretPath string) (map[string]string, error)
 }
 
-// EnvWriter defines the interface for persisting secrets to a local file.
-type EnvWriter interface {
-	Write(path string, secrets map[string]string) error
-}
-
-// Syncer coordinates pulling secrets from Vault and writing them to disk.
+// Syncer orchestrates pulling secrets and writing them to a local env file.
 type Syncer struct {
-	client SecretsClient
-	writer EnvWriter
+	client  SecretReader
+	writer  *env.Merger
+	printer *diff.Printer
+	audit   *audit.Logger
+	opts    Options
 }
 
-// New creates a new Syncer with the provided SecretsClient and EnvWriter.
-func New(client SecretsClient, writer EnvWriter) *Syncer {
+// New creates a Syncer with the provided dependencies.
+func New(client SecretReader, writer *env.Merger, printer *diff.Printer, auditLog *audit.Logger, opts Options) *Syncer {
 	return &Syncer{
-		client: client,
-		writer: writer,
+		client:  client,
+		writer:  writer,
+		printer: printer,
+		audit:   auditLog,
+		opts:    opts,
 	}
 }
 
-// Run fetches secrets from the given Vault path and writes them to outPath.
-// It returns an error if either the fetch or the write operation fails.
-func (s *Syncer) Run(vaultPath, outPath string) error {
-	secrets, err := s.client.GetSecrets(vaultPath)
+// Run pulls secrets for the given profile and merges them into the output file.
+func (s *Syncer) Run(ctx context.Context, profile config.Profile) error {
+	secrets, err := s.client.GetSecrets(ctx, profile.MountPath, profile.VaultPath)
 	if err != nil {
-		return fmt.Errorf("sync: failed to fetch secrets from %q: %w", vaultPath, err)
+		if s.audit != nil {
+			_ = s.audit.Write(audit.Entry{
+				Profile:    profile.Name,
+				VaultPath:  profile.VaultPath,
+				OutputFile: profile.OutputFile,
+				DryRun:     s.opts.DryRun,
+				Error:      err.Error(),
+			})
+		}
+		return fmt.Errorf("fetch secrets: %w", err)
 	}
 
-	if err := s.writer.Write(outPath, secrets); err != nil {
-		return fmt.Errorf("sync: failed to write secrets to %q: %w", outPath, err)
+	changes := diff.Compare(nil, secrets)
+	if s.printer != nil && s.opts.Verbose {
+		s.printer.Print(changes)
 	}
 
+	if !s.opts.DryRun {
+		if err := s.writer.Merge(profile.OutputFile, secrets, s.opts.OverwriteExisting); err != nil {
+			return fmt.Errorf("write env file: %w", err)
+		}
+	}
+
+	if s.audit != nil {
+		counts := countChanges(changes)
+		_ = s.audit.Write(audit.Entry{
+			Profile:    profile.Name,
+			VaultPath:  profile.VaultPath,
+			OutputFile: profile.OutputFile,
+			Added:      counts.added,
+			Updated:    counts.updated,
+			Removed:    counts.removed,
+			Unchanged:  counts.unchanged,
+			DryRun:     s.opts.DryRun,
+		})
+	}
 	return nil
+}
+
+type changeCounts struct{ added, updated, removed, unchanged int }
+
+func countChanges(changes []diff.Change) changeCounts {
+	var c changeCounts
+	for _, ch := range changes {
+		switch ch.Type {
+		case diff.Added:
+			c.added++
+		case diff.Updated:
+			c.updated++
+		case diff.Removed:
+			c.removed++
+		case diff.Unchanged:
+			c.unchanged++
+		}
+	}
+	return c
 }
