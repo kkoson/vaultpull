@@ -2,6 +2,7 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -58,13 +59,15 @@ func (e *TimeoutError) Error() string {
 }
 
 // IsTimeout reports whether err represents a context deadline or timeout.
+// It checks for context.DeadlineExceeded, context.Canceled (when the parent
+// deadline propagates), and *TimeoutError values anywhere in the error chain.
 func IsTimeout(err error) bool {
 	if err == nil {
 		return false
 	}
-	if err == context.DeadlineExceeded {
+	if errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
-	_, ok := err.(*TimeoutError)
-	return ok
+	var te *TimeoutError
+	return errors.As(err, &te)
 }
