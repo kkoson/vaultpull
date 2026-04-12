@@ -20,4 +20,10 @@
 //
 //	// Validate a single profile by name.
 //	result, err := v.ValidateProfile("production")
+//	if err != nil {
+//		log.Fatal(err)
+//	}
+//	if !result.Valid() {
+//		fmt.Printf("profile has errors: %v\n", result.Errors)
+//	}
 package sync
