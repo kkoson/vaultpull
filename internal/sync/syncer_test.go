@@ -82,3 +82,19 @@ func TestSyncer_Run_WriterError(t *testing.T) {
 
 	require.Error(t, err)
 }
+
+func TestSyncer_Run_EmptySecrets(t *testing.T) {
+	tmpDir := t.TempDir()
+	outPath := filepath.Join(tmpDir, ".env")
+
+	client := &mockSecretsClient{
+		secrets: map[string]string{},
+	}
+	writer := &mockEnvWriter{}
+
+	s := sync.New(client, writer)
+	err := s.Run("secret/empty", outPath)
+
+	require.NoError(t, err)
+	assert.Empty(t, writer.written)
+}
