@@ -2,48 +2,42 @@ package sync
 
 import (
 	"context"
-	"errors"
+
+	"golang.org/x/time/rate"
 )
 
-// Limiter caps the number of concurrent profile sync operations.
-// It is backed by a buffered channel used as a counting semaphore.
+// Limiter controls the rate of outbound Vault API requests.
 type Limiter struct {
-	sem chan struct{}
+	r *rate.Limiter
 }
 
-// NewLimiter returns a Limiter that allows at most n concurrent
-// operations. If n is less than 1 it is clamped to 1.
-func NewLimiter(n int) *Limiter {
-	if n < 1 {
-		n = 1
+// NewLimiter returns a Limiter that allows up to rps requests per second.
+// If rps is zero or negative, no limiting is applied.
+func NewLimiter(rps int) *Limiter {
+	if rps <= 0 {
+		return &Limiter{r: nil}
 	}
-	return &Limiter{sem: make(chan struct{}, n)}
-}
-
-// Run acquires a slot, executes fn, then releases the slot.
-// If ctx is cancelled before a slot is available, Run returns
-// ctx.Err() without calling fn.
-func (l *Limiter) Run(ctx context.Context, fn func() error) error {
-	select {
-	case l.sem <- struct{}{}:
-		defer func() { <-l.sem }()
-		return fn()
-	case <-ctx.Done():
-		return ctx.Err()
+	return &Limiter{
+		r: rate.NewLimiter(rate.Limit(rps), rps),
 	}
 }
 
-// Available returns the number of additional slots that can be
-// acquired without blocking.
-func (l *Limiter) Available() int {
-	return cap(l.sem) - len(l.sem)
+// Wait blocks until a token is available or the context is cancelled.
+// If no rate limit is configured, Wait returns immediately.
+func (l *Limiter) Wait(ctx context.Context) {
+	if l == nil || l.r == nil {
+		return
+	}
+	// Honour context cancellation; ignore the error — callers check ctx
+	// themselves after Wait returns.
+	_ = l.r.Wait(ctx) //nolint:errcheck
 }
 
-// Capacity returns the maximum number of concurrent operations
-// allowed by this Limiter.
-func (l *Limiter) Capacity() int {
-	return cap(l.sem)
+// Available reports whether the limiter would grant a token right now
+// without blocking. Returns true when no rate limit is configured.
+func (l *Limiter) Available() bool {
+	if l == nil || l.r == nil {
+		return true
+	}
+	return l.r.Allow()
 }
-
-// ErrLimiterNilFn is returned when Run is called with a nil function.
-var ErrLimiterNilFn = errors.New("limiter: fn must not be nil")
