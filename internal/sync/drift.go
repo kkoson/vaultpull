@@ -1,55 +1,65 @@
 package sync
 
-import (
-	"fmt"
+import "time"
 
-	"github.com/owner/vaultpull/internal/diff"
-)
-
-// DriftResult holds the outcome of a drift check for a single profile.
-type DriftResult struct {
-	// Profile is the name of the profile that was checked.
-	Profile string
-
-	// Changes contains the diff entries between the snapshot and current secrets.
-	Changes []diff.Entry
-
-	// HasDrift is true when at least one change was detected.
-	HasDrift bool
-}
-
-// DriftDetector compares a SnapshotStore against a current set of secrets
-// and reports any differences.
+// DriftDetector compares the current state of secrets against a previously
+// saved snapshot to identify keys that have been added, removed, or changed
+// outside of a normal vaultpull sync cycle.
 type DriftDetector struct {
-	store *SnapshotStore
+	store       *SnapshotStore
+	lastChecked time.Time
 }
 
-// NewDriftDetector creates a DriftDetector backed by the given SnapshotStore.
-func NewDriftDetector(store *SnapshotStore) (*DriftDetector, error) {
-	if store == nil {
-		return nil, fmt.Errorf("drift: snapshot store must not be nil")
+// NewDriftDetector returns a DriftDetector backed by the given SnapshotStore.
+func NewDriftDetector(store *SnapshotStore) *DriftDetector {
+	return &DriftDetector{store: store}
+}
+
+// Detect compares current against the stored snapshot for profile.
+// It returns (true, driftedKeys, nil) when drift is detected, or
+// (false, nil, nil) when the state matches or no snapshot exists yet.
+func (d *DriftDetector) Detect(profile string, current map[string]string) (bool, []string, error) {
+	d.lastChecked = time.Now()
+
+	snapshot, err := d.store.Get(profile)
+	if err != nil {
+		return false, nil, err
 	}
-	return &DriftDetector{store: store}, nil
-}
 
-// Check compares the current secrets for a profile against the last saved
-// snapshot. If no snapshot exists the result will report all keys as added.
-func (d *DriftDetector) Check(profile string, current map[string]string) DriftResult {
-	prev, _ := d.store.Get(profile)
+	// No baseline yet — treat as clean so we don't false-positive on first run.
+	if snapshot == nil {
+		return false, nil, nil
+	}
 
-	entries := diff.Compare(prev, current)
+	var drifted []string
 
-	hasChanges := false
-	for _, e := range entries {
-		if e.Kind != diff.KindUnchanged {
-			hasChanges = true
-			break
+	// Keys that changed value or were removed.
+	for k, snapVal := range snapshot {
+		curVal, ok := current[k]
+		if !ok {
+			drifted = append(drifted, k)
+			continue
+		}
+		if curVal != snapVal {
+			drifted = append(drifted, k)
 		}
 	}
 
-	return DriftResult{
-		Profile:  profile,
-		Changes:  entries,
-		HasDrift: hasChanges,
+	// Keys that were added since the snapshot.
+	for k := range current {
+		if _, ok := snapshot[k]; !ok {
+			drifted = append(drifted, k)
+		}
 	}
+
+	if len(drifted) == 0 {
+		return false, nil, nil
+	}
+
+	return true, drifted, nil
+}
+
+// LastChecked returns the timestamp of the most recent Detect call.
+func (d *DriftDetector) LastChecked() time.Time {
+	return d.lastChecked
 }
