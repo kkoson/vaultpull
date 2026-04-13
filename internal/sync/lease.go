@@ -102,3 +102,18 @@ func (m *LeaseManager) NeedsRenewal(profile string, now time.Time) bool {
 	}
 	return l.NeedsRenewal(now, m.cfg.RenewThreshold)
 }
+
+// ReleaseExpired removes all leases that have expired as of the given time.
+// It returns the profiles whose leases were removed.
+func (m *LeaseManager) ReleaseExpired(now time.Time) []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var expired []string
+	for profile, l := range m.leases {
+		if l.IsExpired(now) {
+			delete(m.leases, profile)
+			expired = append(expired, profile)
+		}
+	}
+	return expired
+}
