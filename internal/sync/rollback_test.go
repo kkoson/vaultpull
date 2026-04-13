@@ -81,6 +81,14 @@ func TestRollbackStore_Clear(t *testing.T) {
 	}
 }
 
+func TestRollbackStore_Clear_NoBackup_NoError(t *testing.T) {
+	// Clearing a key that was never backed up should not return an error.
+	store, _ := NewRollbackStore(t.TempDir())
+	if err := store.Clear("nonexistent"); err != nil {
+		t.Fatalf("expected no error clearing non-existent backup, got: %v", err)
+	}
+}
+
 func TestRollbackStore_BackupTimestamp_NoBackup(t *testing.T) {
 	store, _ := NewRollbackStore(t.TempDir())
 	ts := store.BackupTimestamp("nope")
