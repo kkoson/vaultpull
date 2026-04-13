@@ -32,7 +32,8 @@ func NewWatchdog(deadline time.Duration, restart func(name string)) *Watchdog {
 	}
 }
 
-// Beat records a heartbeat for the named worker.
+// Beat records a heartbeat for the named worker. If the worker is not yet
+// registered, this call also registers it.
 func (w *Watchdog) Beat(name string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -44,6 +45,17 @@ func (w *Watchdog) Unregister(name string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	delete(w.heartbeat, name)
+}
+
+// Registered returns the names of all currently monitored workers.
+func (w *Watchdog) Registered() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	names := make([]string, 0, len(w.heartbeat))
+	for name := range w.heartbeat {
+		names = append(names, name)
+	}
+	return names
 }
 
 // Start begins the watchdog loop, checking heartbeats every interval until
