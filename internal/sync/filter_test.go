@@ -76,3 +76,12 @@ func TestFilter_AllowedProfiles(t *testing.T) {
 		t.Errorf("expected only [dev], got %v", allowed)
 	}
 }
+
+func TestFilter_AllowedProfiles_EmptyInput(t *testing.T) {
+	f := NewFilter([]string{"dev"}, nil)
+	allowed := f.AllowedProfiles([]string{})
+
+	if len(allowed) != 0 {
+		t.Errorf("expected empty result for empty input, got %v", allowed)
+	}
+}
