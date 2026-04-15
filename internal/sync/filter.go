@@ -56,3 +56,12 @@ func (f *Filter) AllowedProfiles(names []string) []string {
 	}
 	return out
 }
+
+// IsEmpty reports whether the filter has no include or exclude rules defined.
+// An empty filter allows all profiles to pass through.
+func (f *Filter) IsEmpty() bool {
+	if f == nil {
+		return true
+	}
+	return len(f.Include) == 0 && len(f.Exclude) == 0
+}
