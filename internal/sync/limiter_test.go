@@ -83,3 +83,21 @@ func TestLimiter_Wait_RateLimit_Concurrent(t *testing.T) {
 		t.Errorf("rate limiter too slow: %v", elapsed)
 	}
 }
+
+func TestLimiter_Wait_RateLimit_Enforced(t *testing.T) {
+	// At 2 rps, consuming 4 tokens should take at least ~1 second.
+	const rps = 2
+	const requests = 4
+	l := NewLimiter(rps)
+	ctx := context.Background()
+
+	start := time.Now()
+	for i := 0; i < requests; i++ {
+		l.Wait(ctx)
+	}
+	elapsed := time.Since(start)
+
+	if elapsed < time.Second {
+		t.Errorf("rate limiter did not enforce rate: elapsed %v, expected >= 1s", elapsed)
+	}
+}
