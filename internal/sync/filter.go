@@ -65,3 +65,23 @@ func (f *Filter) IsEmpty() bool {
 	}
 	return len(f.Include) == 0 && len(f.Exclude) == 0
 }
+
+// String returns a human-readable summary of the filter rules.
+func (f *Filter) String() string {
+	if f.IsEmpty() {
+		return "filter(none)"
+	}
+	var b strings.Builder
+	b.WriteString("filter(")
+	if len(f.Include) > 0 {
+		b.WriteString("include=[" + strings.Join(f.Include, ",") + "]")
+	}
+	if len(f.Exclude) > 0 {
+		if len(f.Include) > 0 {
+			b.WriteString(" ")
+		}
+		b.WriteString("exclude=[" + strings.Join(f.Exclude, ",") + "]")
+	}
+	b.WriteString(")")
+	return b.String()
+}
