@@ -13,9 +13,17 @@
 //	limiter := sync.NewLimiter(cfg.RequestsPerSecond)
 //
 //	// Before each Vault API call:
-//	limiter.Wait(ctx)
+//	if err := limiter.Wait(ctx); err != nil {
+//		return err
+//	}
 //
 // The limiter respects context cancellation; if the context is cancelled
-// while waiting for a token, Wait returns immediately so the caller can
-// propagate the cancellation.
+// while waiting for a token, Wait returns the context's error so the caller
+// can propagate the cancellation.
+//
+// # Choosing a Rate
+//
+// Set RequestsPerSecond to a value slightly below the Vault server's
+// configured rate limit to avoid 429 responses under concurrent load.
+// A value of 50 is a reasonable default for most deployments.
 package sync
