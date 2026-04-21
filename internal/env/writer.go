@@ -38,6 +38,10 @@ func (w *Writer) Write(secrets map[string]string) error {
 			return fmt.Errorf("env: write key %q: %w", k, err)
 		}
 	}
+
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("env: sync file %q: %w", w.filePath, err)
+	}
 	return nil
 }
 
